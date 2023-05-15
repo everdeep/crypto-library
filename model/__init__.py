@@ -13,7 +13,7 @@ from .balancehistory import BalanceHistoryModel
 from .order import OrderModel
 from .address import AddressModel
 from .role import RoleModel
-from .userroles import UserRoleModel
+from .userroles import roles_users
 from .serveractivity import ServerActivityModel
 
 from sqlalchemy.orm import relationship
@@ -28,7 +28,7 @@ SymbolModel.currency_pairs = relationship(CurrencyPairModel, backref="symbols")
 UserModel.settings = relationship(UserSettingsModel, backref="users")
 UserModel.api_keys = relationship(ApiKeyModel, backref="users")
 UserModel.portfolio = relationship(PortfolioModel, backref="users", uselist=False)
-UserModel.address = relationship(AddressModel, backref="users")
+UserModel.address = relationship(AddressModel, backref="users", uselist=False)
 UserModel.orders = relationship(OrderModel, backref="users")
 UserModel.currency_pair_configs = relationship(CurrencyPairConfigModel, backref="users")
 
@@ -42,17 +42,14 @@ CurrencyPairConfigModel.strategy_config = relationship(
     StrategyConfigModel, backref="currency_pair_configs"
 )
 
-RoleModel.users = relationship(UserRoleModel, backref="roles")
-UserModel.roles = relationship(UserRoleModel, backref="users")
+RoleModel.users = relationship(
+    UserModel,
+    secondary=roles_users,
+    back_populates="roles"
+)
 
-# RoleModel.users = relationship(
-#     "UserModel",
-#     secondary="roles_users",
-#     back_populates="roles"
-# )
-
-# UserModel.roles = relationship(
-#     "RoleModel",
-#     secondary="roles_users",
-#     back_populates="users"
-# )
+UserModel.roles = relationship(
+    RoleModel,
+    secondary=roles_users,
+    back_populates="users"
+)
