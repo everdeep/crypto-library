@@ -215,7 +215,7 @@ CREATE TABLE server_activity (
     track_var VARCHAR(128),
     UNIQUE (id, user_id),
     INDEX (user_id),
-    CONSTRAINT fk_api_keys_users
+    CONSTRAINT fk_server_activity_users
         FOREIGN KEY (user_id)
         REFERENCES users(id)
 );
