@@ -10,3 +10,6 @@ from .portfolio import PortfolioSchema
 from .order import OrderSchema
 from .usersettings import UserSettingsSchema
 from .user import UserSchema
+from .role import RoleSchema
+from .serveractivity import ServerActivitySchema
+from .useractivity import UserActivitySchema

@@ -2,6 +2,8 @@ from sqlalchemy import Column, Integer, String, Date, DateTime
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
+from cryptolib.utils.validators import Validator
+
 from uuid import uuid4
 
 Base = declarative_base()

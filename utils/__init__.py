@@ -1,8 +1,13 @@
 import random
 import string
-
 from cryptolib.enums import Interval
 from uuid import uuid4
+
+from .validators import validate_password
+
+
+def get_uuid():
+    return uuid4().hex
 
 
 # generate random unique digit
@@ -17,8 +22,19 @@ def generate_random_string(length: int):
     )
 
 
-def get_uuid():
-    return uuid4().hex
+def get_unfiltered_response(model, schema):
+    """Get unfiltered response from cryptolib.schema and model when the schema is a subset of the model"""
+    return {**model.as_dict(), **schema}
+
+
+# Random strong password generator with 1 uppercase, 1 lowercase, 1 number and 1 special character
+def generate_password(length=12):
+    """Generate a random password"""
+    password = generate_random_string(length)
+    while not validate_password(password):
+        password = generate_random_string(length)
+
+    return password
 
 
 # Convert interval to seconds

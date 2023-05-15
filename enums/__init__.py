@@ -93,3 +93,21 @@ class OrderStatus(Enum):
 class OrderSide(Enum):
     BUY = "Buy"
     SELL = "Sell"
+
+
+class RoleType(Enum):
+    """User roles"""
+
+    ADMIN = "admin"
+    USER = "user"
+
+
+class UserActions(Enum):
+    """User actions"""
+
+    LOGIN = "user.login"
+    LOGOUT = "user.logout"
+    REGISTER = "user.register"
+    DELETE = "user.delete"
+    # UPDATE = "user.update"
+    # TRADE = "trade"

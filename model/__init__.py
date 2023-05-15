@@ -12,6 +12,9 @@ from .balance import BalanceModel
 from .balancehistory import BalanceHistoryModel
 from .order import OrderModel
 from .address import AddressModel
+from .role import RoleModel
+from .userroles import UserRoleModel
+from .serveractivity import ServerActivityModel
 
 from sqlalchemy.orm import relationship
 
@@ -38,3 +41,18 @@ CurrencyPairConfigModel.orders = relationship(
 CurrencyPairConfigModel.strategy_config = relationship(
     StrategyConfigModel, backref="currency_pair_configs"
 )
+
+RoleModel.users = relationship(UserRoleModel, backref="roles")
+UserModel.roles = relationship(UserRoleModel, backref="users")
+
+# RoleModel.users = relationship(
+#     "UserModel",
+#     secondary="roles_users",
+#     back_populates="roles"
+# )
+
+# UserModel.roles = relationship(
+#     "RoleModel",
+#     secondary="roles_users",
+#     back_populates="users"
+# )
