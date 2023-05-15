@@ -13,22 +13,22 @@ configure_mappers()
 
 class UserSchema(SQLAlchemyAutoSchema):
     class Meta:
-        fields = (
-            "id",
-            "email",
-            "first_name",
-            "last_name",
-            "username",
-            "dob",
-            "phone",
-            "address",
-            "portfolio",
-            "settings",
-            "roles",
-            "is_verified",
-            # "orders",
-            # "currency_pair_configs",
-        )
+        # fields = (
+        #     "id",
+        #     "email",
+        #     "first_name",
+        #     "last_name",
+        #     "username",
+        #     "dob",
+        #     "phone",
+        #     "address",
+        #     "portfolio",
+        #     "settings",
+        #     "roles",
+        #     "is_verified",
+        #     # "orders",
+        #     # "currency_pair_configs",
+        # )
         model = UserModel
 
     settings = List(Nested("UserSettingsSchema"))

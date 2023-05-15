@@ -1,8 +1,8 @@
 from marshmallow.fields import List
 from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
 
-from cryptolib.utils.marshmallow import Nested
 from cryptolib.model import PortfolioModel
+from cryptolib.utils.marshmallow import Nested
 
 # IMPORTANT: This is needed to make the marshmallow_sqlalchemy work
 # import after the models are defined and before the marshmallow schemas
