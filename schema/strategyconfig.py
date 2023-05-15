@@ -1,4 +1,3 @@
-from marshmallow import post_load
 from marshmallow_enum import EnumField
 from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
 
