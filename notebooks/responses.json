@@ -1,0 +1,80 @@
+{
+    "symbol": "BTCUSDT",
+    "orderId": 21151708372,
+    "orderListId": -1,
+    "clientOrderId": "ZdF1eOriBtFbd8JDq9qdas",
+    "transactTime": 1684173752602,
+    "price": "0.00000000",
+    "origQty": "0.00036000",
+    "executedQty": "0.00036000",
+    "cummulativeQuoteQty": "9.90207000",
+    "status": "FILLED",
+    "timeInForce": "GTC",
+    "type": "MARKET",
+    "side": "SELL",
+    "workingTime": 1684173752602,
+    "fills": [
+        {
+            "price": "27505.75000000",
+            "qty": "0.00036000",
+            "commission": "0.00990207",
+            "commissionAsset": "USDT",
+            "tradeId": 3118352611
+        }
+    ],
+    "selfTradePreventionMode": "NONE"
+}
+
+{
+    "symbol": "BTCUSDT",
+    "orderId": 21151743974,
+    "orderListId": -1,
+    "clientOrderId": "x6QuJrp4gz3pfYtBBCVdyn",
+    "transactTime": 1684174071100,
+    "price": "0.00000000",
+    "origQty": "0.00036000",
+    "executedQty": "0.00036000",
+    "cummulativeQuoteQty": "9.89682120",
+    "status": "FILLED",
+    "timeInForce": "GTC",
+    "type": "MARKET",
+    "side": "SELL",
+    "workingTime": 1684174071100,
+    "fills": [
+        {
+            "price": "27491.17000000",
+            "qty": "0.00036000",
+            "commission": "0.00989682",
+            "commissionAsset": "USDT",
+            "tradeId": 3118355616
+        }
+    ],
+    "selfTradePreventionMode": "NONE"
+}
+
+{
+    "symbol": "BTCUSDT",
+    "orderId": 21151747208,
+    "orderListId": -1,
+    "clientOrderId": "00LB3D8JS6gV4gQwfBwpHH",
+    "transactTime": 1684174134215,
+    "price": "0.00000000",
+    "origQty": "0.00036000",
+    "executedQty": "0.00036000",
+    "cummulativeQuoteQty": "9.89642880",
+    "status": "FILLED",
+    "timeInForce": "GTC",
+    "type": "MARKET",
+    "side": "BUY",
+    "workingTime": 1684174134215,
+    "fills": [
+        {
+            "price": "27490.08000000",
+            "qty": "0.00036000",
+            "commission": "0.00000036",
+            "commissionAsset": "BTC",
+            "tradeId": 3118355950
+        }
+    ],
+    "selfTradePreventionMode": "NONE"
+}

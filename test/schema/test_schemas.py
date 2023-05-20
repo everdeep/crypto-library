@@ -196,11 +196,12 @@ def test_user_schema(session):
     assert "address" in data
     assert "portfolio" in data
     assert "settings" in data
+    assert "roles" in data
     # assert "api_keys" not in data
     # assert "orders" in data
     # assert "currency_pair_configs" in data
     # assert "activity" in data
-    assert len(data.keys()) == 11
+    assert len(data.keys()) == 12
 
 
 def test_user_settings_schema(session):
