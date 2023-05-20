@@ -161,7 +161,7 @@ class Binance(Base):
             "symbol": config.currency_pair,
             "side": signal.name,
             "type": OrderType.MARKET.name,
-            "cost": cost,
+            "cost": f"{cost:.8f}", # max 8 decimal place precision required by Binance
         }
 
     def create_order(self, order: dict) -> dict:
