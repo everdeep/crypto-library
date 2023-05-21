@@ -5,9 +5,11 @@ from cryptolib.config import config
 
 from .stream import Stream
 
-class Base:
 
-    def __init__(self, api_key = None, api_secret = None, exchange_type: ExchangeType = None):
+class Base:
+    def __init__(
+        self, api_key=None, api_secret=None, exchange_type: ExchangeType = None
+    ):
         self.sandbox = config.API_SANDBOX if hasattr(config, "API_SANDBOX") else False
 
         # Use global dev api keys if user has no api keys
@@ -26,10 +28,6 @@ class Base:
         )
         self.exchange.set_sandbox_mode(self.sandbox)
 
-        # Mapping symbols
-        self.stream = Stream(self.sandbox)
-
-
     def _load_dev_api_keys(self, exchange_type: ExchangeType):
         """Load dev api keys from config"""
         if exchange_type == ExchangeType.BINANCE:
@@ -40,7 +38,6 @@ class Base:
             self._api_secret = config.COINBASE_API_SECRET
         else:
             raise Exception("Error loading api key... Exchange type not supported")
-
 
     def get_account(self) -> dict:
         """Get account information
@@ -71,7 +68,7 @@ class Base:
         :rtype: dict
         """
         return self.stream.get_ticker(symbol)
-    
+
     def get_last_price(self, symbol: str) -> float:
         """Get last price for a symbol
 
@@ -82,8 +79,9 @@ class Base:
 
         :rtype: float
         """
-        return float(self.stream.get_ticker(symbol).get("last_price", 0.0))
-    
+        # return float(self.stream.get_ticker(symbol).get("last_price", 0.0))
+        raise NotImplementedError
+
     def get_klines(self, symbol: str, interval: Interval) -> list:
         """Get klines for a symbol
 
@@ -97,7 +95,8 @@ class Base:
 
         :rtype: list
         """
-        return self.stream.get_klines(symbol, interval)
+        # return self.stream.get_klines(symbol, interval)
+        raise NotImplementedError
 
     def get_historical_klines(self, symbol: str, **params) -> list[list]:
         """Get historical klines for a symbol

@@ -1,3 +1,4 @@
+import logging
 from threading import Lock
 from cryptolib.enums import Interval
 from unicorn_binance_websocket_api.manager import BinanceWebSocketApiManager
@@ -15,6 +16,7 @@ class SingletonMeta(type):
         """
         with cls._lock:
             if cls not in cls._instances:
+                logging.info(f"Creating new instance of {cls}")
                 instance = super().__call__(*args, **kwargs)
                 cls._instances[cls] = instance
         return cls._instances[cls]
@@ -487,7 +489,7 @@ class Stream(metaclass=SingletonMeta):
             output_default="UnicornFy",
         )
 
-        self.start()
+        # self.start()
 
     def start(self):
         """Start the websocket connection"""

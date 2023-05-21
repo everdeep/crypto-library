@@ -39,6 +39,9 @@ class Binance(Base):
     def get_all_symbols(self) -> list:
         data = self.exchange.fetch_tickers()
         return data
+    
+    def get_last_price(self, symbol: str) -> float:
+        return self.client.get_symbol_ticker(symbol=symbol)["price"]
 
     def get_historical_klines(self, symbol: str, interval: str, limit: int = 1000) -> list[list]:
         res = _handle_exception(self.client.get_klines)(symbol=symbol, interval=interval, limit=limit)

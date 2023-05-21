@@ -75,6 +75,10 @@ class Coinbase(Base):
         }
         return res
 
+    def get_last_price(self, symbol: str) -> float:
+        # TODO: Check symbol is valid
+        return self.client_pro.get_product_ticker(symbol).get("price", 0.0)
+
     def get_historical_klines(self, symbol: str, interval: str) -> list[list]:
         """Get klines for a symbol
 
