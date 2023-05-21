@@ -16,9 +16,9 @@ class Interval(Enum):
     HOUR_8 = "8h"
     HOUR_12 = "12h"
     DAY_1 = "1d"
-    # DAY_3 = "3d"
-    # WEEK_1 = "1w"
-    # MONTH_1 = "1M"
+    DAY_3 = "3d"
+    WEEK_1 = "1w"
+    MONTH_1 = "1M"
 
 
 class Signal(Enum):
@@ -73,6 +73,7 @@ class StrategyParams(Enum):
 
 class ExchangeType(Enum):
     BINANCE = "Binance"
+    COINBASE = "Coinbase"
 
 
 class OrderType(Enum):

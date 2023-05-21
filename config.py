@@ -14,7 +14,10 @@ class Config:
 
 class DevelopmentConfig(Config):
     BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY")
-    BINANCE_API_SECRET = os.environ.get("BINANCE_API_SECRETV")
+    BINANCE_API_SECRET = os.environ.get("BINANCE_API_SECRET")
+
+    COINBASE_API_KEY = os.environ.get("COINBASE_API_KEY")
+    COINBASE_API_SECRET = os.environ.get("COINBASE_API_SECRET")
 
 
 class SandboxConfig(Config):
@@ -22,6 +25,9 @@ class SandboxConfig(Config):
 
     BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY_SANDBOX")
     BINANCE_API_SECRET = os.environ.get("BINANCE_API_SECRET_SANDBOX")
+
+    COINBASE_API_KEY = os.environ.get("COINBASE_API_KEY_SANDBOX")
+    COINBASE_API_SECRET = os.environ.get("COINBASE_API_SECRET_SANDBOX")
 
 
 class ProductionConfig(Config):

@@ -1,46 +1,41 @@
-import ccxt
+import logging
+import pandas as pd
+from coinbase.wallet.client import Client
+from coinbasepro.public_client import PublicClient
 
-from cryptolib.enums import OrderStatus, Signal, ExchangeType, Interval
-from cryptolib.config import config
+from cryptolib.enums import ExchangeType, OrderStatus, Signal, Interval
+from cryptolib.utils import interval_to_seconds
 
-from .stream import Stream
+from .base import Base
 
-class Base:
 
-    def __init__(self, api_key = None, api_secret = None, exchange_type: ExchangeType = None):
-        self.sandbox = config.API_SANDBOX if hasattr(config, "API_SANDBOX") else False
+class Coinbase(Base):
+    # Add stub method from parent
 
-        # Use global dev api keys if user has no api keys
-        if not api_key and config.DEBUG == True:
-            self._load_dev_api_keys(exchange_type)
-        else:
-            self._api_key = api_key
-            self._api_secret = api_secret
+    def __init__(self, api_key: str = None, api_secret: str = None):
+        super().__init__(api_key, api_secret, exchange_type=ExchangeType.COINBASE)
 
-        self.exchange = ccxt.binance(
-            {
-                "apiKey": api_key,
-                "secret": api_secret,
-                "enableRateLimit": True,
-            }
+        self.fee = {
+            "taker": 0.005,
+            "maker": 0.005,
+        }
+
+        _API_URL = "https://api.coinbase.com"
+        _API_PRO_URL = "https://api.pro.coinbase.com"
+        _SANDBOX_URL = "https://api-public.sandbox.exchange.coinbase.com"
+
+        API_VERSION = "2018-03-22"
+        BASE_URL = _SANDBOX_URL if self.sandbox else _API_URL
+        BASE_URL_PRO = _SANDBOX_URL if self.sandbox else _API_PRO_URL
+
+        # coinbase client
+        self.client = Client(
+            api_key=self._api_key,
+            api_secret=self._api_secret,
+            base_api_uri=BASE_URL,
+            api_version=API_VERSION,
         )
-        self.exchange.set_sandbox_mode(self.sandbox)
-
-        # Mapping symbols
-        self.stream = Stream(self.sandbox)
-
-
-    def _load_dev_api_keys(self, exchange_type: ExchangeType):
-        """Load dev api keys from config"""
-        if exchange_type == ExchangeType.BINANCE:
-            self._api_key = config.BINANCE_API_KEY
-            self._api_secret = config.BINANCE_API_SECRET
-        elif exchange_type == ExchangeType.COINBASE:
-            self._api_key = config.COINBASE_API_KEY
-            self._api_secret = config.COINBASE_API_SECRET
-        else:
-            raise Exception("Error loading api key... Exchange type not supported")
-
+        self.client_pro = PublicClient(api_url=BASE_URL_PRO, rate_limit=0)
 
     def get_account(self) -> dict:
         """Get account information
@@ -49,7 +44,14 @@ class Base:
 
         :rtype: dict
         """
-        raise NotImplementedError
+        res = _handle_exception(self.client.get_accounts)()["data"]
+        if res is None:
+            logging.error(
+                f"Failed to get account information from Coinbase API: sandboxed - {self.sandbox} api_key: {self._api_key}"
+            )
+            return {}
+
+        return pd.DataFrame(res)
 
     def get_balance(self) -> list[dict]:
         """Get balance information
@@ -58,64 +60,63 @@ class Base:
 
         :rtype: list[dict]
         """
-        raise NotImplementedError
+        accounts = self.get_account()
+        balances = accounts[
+            accounts["balance"].apply(lambda x: float(x.get("amount")) > 0)
+            & accounts["id"].apply(lambda x: len(x) < 10)
+        ]
+        res = {
+            balances.iloc[i]["id"]: {
+                "free": float(balances.iloc[i]["balance"].get("amount")),
+                "locked": 0.0,
+                "total": float(balances.iloc[i]["balance"].get("amount")),
+            }
+            for i in range(len(balances))
+        }
+        return res
 
-    def get_ticker(self, symbol: str) -> dict:
-        """Get ticker for a symbol
-
-        :param symbol: The symbol to get ticker information for
-        :type symbol: str
-
-        :return: The ticker information for the symbol
-
-        :rtype: dict
-        """
-        return self.stream.get_ticker(symbol)
-    
-    def get_last_price(self, symbol: str) -> float:
-        """Get last price for a symbol
-
-        :param symbol: The symbol to get ticker information for
-        :type symbol: str
-
-        :return: The ticker information for the symbol
-
-        :rtype: float
-        """
-        return float(self.stream.get_ticker(symbol).get("last_price", 0.0))
-    
-    def get_klines(self, symbol: str, interval: Interval) -> list:
+    def get_historical_klines(self, symbol: str, interval: str) -> list[list]:
         """Get klines for a symbol
 
         :param symbol: The symbol to get data for
         :type symbol: str
 
-        :param interval: The interval to get data for
-        :type interval: Interval
+        :param interval: The interval of the data
+        :type interval: int
 
         :return: The symbol data
 
-        :rtype: list
+        :rtype: DataFrame
         """
-        return self.stream.get_klines(symbol, interval)
 
-    def get_historical_klines(self, symbol: str, **params) -> list[list]:
-        """Get historical klines for a symbol
+        granularity = interval_to_seconds(Interval(interval))
+        # Coinbase only supports these intervals
+        # 1m, 5m, 15m, 1h, 6h, 1d
+        # https://docs.cloud.coinbase.com/exchange/reference/exchangerestapi_getproductcandles
+        if granularity not in [60, 300, 900, 3600, 21600, 86400]:
+            logging.error(f"Invalid interval {interval} for API: Coinbase")
+            return []
 
-        :param symbol: The symbol to get data for
-        :type symbol: str
+        res = self.client_pro.get_product_historic_rates(
+            symbol, granularity=granularity
+        )
+        if res is None:
+            logging.error(f"Failed to get klines for {symbol}")
+            return []
 
-        :param interval: The interval to get data for
-        :type interval: str
-
-        :param limit: The limit of data to get
-        :type limit: int
-
-        :return: The symbol data
-
-        :rtype: list[list]
-        """
-        raise NotImplementedError
+        data = pd.DataFrame(
+            res,
+            columns=[
+                "time",
+                "high",
+                "low",
+                "open",
+                "close",
+                "volume",
+            ],
+        )
+        data.set_index("time", inplace=True)
+        return data
 
     def get_open_orders(self, symbol: str = None) -> list[dict]:
         """Get open orders
@@ -242,3 +243,13 @@ class Base:
         :rtype: float
         """
         return 0.0
+
+
+def _handle_exception(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            logging.error(f"Error in {func.__name__}: {e}")
+
+    return wrapper

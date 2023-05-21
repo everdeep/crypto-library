@@ -1,15 +1,16 @@
 import logging
 import pandas as pd
+import numpy as np
 from .base import Base
 
-from cryptolib.enums import OrderStatus, OrderType, Signal
+from cryptolib.enums import OrderStatus, OrderType, Signal, ExchangeType
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceOrderException
 
 
 class Binance(Base):
     def __init__(self, api_key: str = None, api_secret: str = None):
-        super().__init__(api_key, api_secret)
+        super().__init__(api_key, api_secret, exchange_type=ExchangeType.BINANCE)
 
         self.fee = {
             "taker": 0.001,
@@ -39,21 +40,33 @@ class Binance(Base):
         data = self.exchange.fetch_tickers()
         return data
 
-    def get_klines(self, symbol: str, interval: str, limit: int) -> list[list]:
+    def get_historical_klines(self, symbol: str, interval: str, limit: int = 1000) -> list[list]:
         res = _handle_exception(self.client.get_klines)(symbol=symbol, interval=interval, limit=limit)
         if res is None:
             logging.error(f"Error fetching k-lines data for symbol: {symbol}, interval: {interval}, limit: {limit}")
             return []
         
-        return res
-
-    def get_last_price(self, symbol: str) -> float:
-        res = _handle_exception(self.client.get_symbol_ticker)(symbol=symbol)
-        if res is None:
-            logging.error(f"Error fetching last price for symbol: {symbol}")
-            return 0.0
-        
-        return float(res["price"])
+        data = pd.DataFrame(
+            res,
+            columns=[
+                "time",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "close_time",
+                "quote_asset_volume",
+                "number_of_trades",
+                "taker_buy_base_asset_volume",
+                "taker_buy_quote_asset_volume",
+                "ignore",
+            ],
+            dtype=np.float64,
+        )
+        data.set_index("time", inplace=True)
+        data.index = pd.to_datetime(data.index, unit="ms")
+        return data
 
 
     def get_account(self) -> dict:
@@ -161,7 +174,7 @@ class Binance(Base):
             "symbol": config.currency_pair,
             "side": signal.name,
             "type": OrderType.MARKET.name,
-            "cost": f"{cost:.8f}", # max 8 decimal place precision required by Binance
+            "cost": float(f"{cost:.8f}"), # max 8 decimal place precision required by Binance
         }
 
     def create_order(self, order: dict) -> dict:
