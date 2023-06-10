@@ -22,7 +22,8 @@ Example:
 from cryptolib.model import *
 from cryptolib.schema import *
 from cryptolib.utils import *
-from cryptolib.exchange import *
+from cryptolib.exchange import Binance, Coinbase
+from cryptolib.exchange.stream import Streamer
 from cryptolib.enums import *
 ```
 
@@ -30,4 +31,4 @@ from cryptolib.enums import *
 - 2023-06-10: Added database support to live streamer
     1. Need to fix the table and streamer for depth
     2. Planning to add in functionality for spread fee calculation; should be calculated in the depth streamer
-
+    3. Potentially refactor the stream out of the exchange folder
