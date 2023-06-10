@@ -1,7 +1,12 @@
 import logging
 from threading import Lock
 from cryptolib.enums import Interval
+from cryptolib.model import TickerModel, KlinesModel
+from cryptolib.schema import TickerSchema
+from cryptolib.config import config
 from unicorn_binance_websocket_api.manager import BinanceWebSocketApiManager
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 
 class SingletonMeta(type):
@@ -477,12 +482,34 @@ class Stream(metaclass=SingletonMeta):
     ]
 
     # NOTE: Max 5 connections per IP
-    CHANNELS = ["ticker", "kline_1m"]
+    CHANNELS = ["ticker"]
+    # CHANNELS = ["ticker", "kline_1m", "depth5"]
 
-    def __init__(self, sandbox: bool):
+    def __init__(
+        self,
+        sandbox: bool,
+        markets: list[str] = None,
+        channels: list[str] = None,
+        db_enabled: bool = False,
+    ):
         self._sandbox = sandbox
         self._streams = []
         self.stream_data = {}
+        self.depth = []
+
+        if markets:
+            self.MARKETS = markets
+
+        if channels:
+            self.CHANNELS = channels
+
+        # Setup database if enabled
+        self.db_enabled = db_enabled
+        if self.db_enabled:
+            self._engine = create_engine(
+                config.STREAM_DB_URI, echo=False, pool_size=20, max_overflow=0
+            )
+            self.Session = sessionmaker(bind=self._engine)
 
         self._manager = BinanceWebSocketApiManager(
             exchange=self.STREAM_URL if not sandbox else self.SANDBOX_URL,
@@ -503,6 +530,8 @@ class Stream(metaclass=SingletonMeta):
             func = None
             if "kline" in channel:
                 func = getattr(self, "_process_kline")
+            elif "depth" in channel:
+                func = getattr(self, "_process_depth")
             else:
                 func = getattr(self, f"_process_{channel}")
 
@@ -527,6 +556,14 @@ class Stream(metaclass=SingletonMeta):
 
             symbol = data.get("data", {})[0].get("symbol")
             self.stream_data[stream_type][symbol] = data.get("data", {})[0]
+
+            if self.db_enabled:
+                self._save_db(
+                    tablename=TickerModel.__tablename__,
+                    symbol=symbol,
+                    data=data.get("data", {})[0],
+                )
+
         except KeyError:
             pass
 
@@ -542,6 +579,82 @@ class Stream(metaclass=SingletonMeta):
         except KeyError:
             pass
 
+    def _process_depth(self, data):
+        """Process new stream data"""
+        try:
+            stream_type = data["stream_type"].split("@")[1]
+            if stream_type not in self.stream_data:
+                self.stream_data[stream_type] = {}
+
+            symbol = data["symbol"]
+            self.stream_data[stream_type][symbol] = {
+                "bids": data["bids"],
+                "asks": data["asks"],
+            }
+        except KeyError:
+            pass
+
+    def _remove_columns(self, data, columns):
+        """Remove columns from data"""
+        for column in columns:
+            data.pop(column, None)
+
+        return data
+
+    def _save_db(self, tablename, symbol, data, **kwargs):
+        """Save data to database"""
+        if not self.db_enabled:
+            return
+
+        if not kwargs.get("interval") and tablename == KlinesModel.__tablename__:
+            raise ValueError("Missing interval argument for kline data")
+
+        with self.Session() as session:
+            try:
+                if tablename == TickerModel.__tablename__:
+                    self._remove_columns(
+                        data,
+                        [
+                            "event_time",
+                            "stream_type",
+                            "event_type",
+                            "statistics_open_time",
+                            "statistics_close_time",
+                            "first_trade_id",
+                            "last_trade_id",
+                        ],
+                    )
+                    ticker = session.query(TickerModel).filter_by(symbol=symbol).first()
+                    if ticker:
+                        # update existing ticker
+                        for key, value in data.items():
+                            setattr(ticker, key, value)
+                    else:
+                        # create new ticker
+                        ticker = TickerModel(**data)
+                        session.add(ticker)
+
+                elif tablename == KlinesModel.__tablename__:
+                    kline = (
+                        session.query(KlinesModel)
+                        .filter_by(symbol=symbol, interval=kwargs["interval"])
+                        .first()
+                    )
+                    if kline:
+                        # update existing kline
+                        for key, value in data.items():
+                            setattr(kline, key, value)
+                    else:
+                        # create new kline
+                        kline = KlinesModel(**data)
+                        session.add(kline)
+            except Exception as e:
+                logging.error(f"Failed to save {tablename} data to database")
+                logging.error(e)
+                self.stop()
+
+            session.commit()
+
     def get_ticker(self, symbol: str) -> dict:
         """Get ticker
 
@@ -551,6 +664,11 @@ class Stream(metaclass=SingletonMeta):
         :return: The ticker
         :rtype: dict
         """
+        if self.db_enabled:
+            with self.Session() as session:
+                ticker = session.query(TickerModel).filter_by(symbol=symbol).first()
+                return TickerSchema().dump(ticker)
+
         return self.stream_data.get("ticker", {}).get(symbol, {})
 
     def get_klines(self, symbol: str, interval: Interval) -> list:
@@ -562,4 +680,25 @@ class Stream(metaclass=SingletonMeta):
         :return: The klines
         :rtype: list
         """
+
+        if self.db_enabled:
+            with self.Session() as session:
+                klines = (
+                    session.query(KlinesModel)
+                    .filter_by(symbol=symbol, interval=interval.value)
+                    .first()
+                )
+                return klines
+
         return self.stream_data.get(f"kline_{interval.value}", {}).get(symbol, {})
+
+    def get_depth(self, symbol: str) -> dict:
+        """Get depth
+
+        :param symbol: The symbol to get depth for
+        :type symbol: str
+
+        :return: The depth
+        :rtype: dict
+        """
+        return self.stream_data.get("depth", {}).get(symbol, {})

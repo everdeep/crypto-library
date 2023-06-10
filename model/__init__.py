@@ -15,6 +15,8 @@ from .address import AddressModel
 from .role import RoleModel
 from .userroles import roles_users
 from .serveractivity import ServerActivityModel
+from .ticker import TickerModel
+from .klines import KlinesModel
 
 from sqlalchemy.orm import relationship
 

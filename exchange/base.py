@@ -1,9 +1,13 @@
 import ccxt
+import logging
 
-from cryptolib.enums import OrderStatus, Signal, ExchangeType, Interval
+from cryptolib.enums import OrderStatus, Signal, ExchangeType, Interval, OrderType
+from cryptolib.model import TickerModel
+from cryptolib.schema import TickerSchema
 from cryptolib.config import config
 
-from .stream import Stream
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 
 class Base:
@@ -28,6 +32,14 @@ class Base:
         )
         self.exchange.set_sandbox_mode(self.sandbox)
 
+        # Create stream DB Engine
+        self._db_engine = create_engine(
+            config.SQLALCHEMY_DATABASE_URI, echo=False, pool_size=20
+        )
+        self._stream_engine = create_engine(
+            config.STREAM_DB_URI, echo=False, pool_size=20
+        )
+
     def _load_dev_api_keys(self, exchange_type: ExchangeType):
         """Load dev api keys from config"""
         if exchange_type == ExchangeType.BINANCE:
@@ -38,6 +50,15 @@ class Base:
             self._api_secret = config.COINBASE_API_SECRET
         else:
             raise Exception("Error loading api key... Exchange type not supported")
+
+    def _handle_exception(self, func):
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                logging.error(f"Error in {func.__name__}: {e}")
+
+        return wrapper
 
     def get_account(self) -> dict:
         """Get account information
@@ -67,7 +88,9 @@ class Base:
 
         :rtype: dict
         """
-        return self.stream.get_ticker(symbol)
+        with Session(self._stream_engine) as session:
+            ticker = session.query(TickerModel).filter_by(symbol=symbol).first()
+            return TickerSchema().dump(ticker) if ticker else {}
 
     def get_last_price(self, symbol: str) -> float:
         """Get last price for a symbol
@@ -79,8 +102,7 @@ class Base:
 
         :rtype: float
         """
-        # return float(self.stream.get_ticker(symbol).get("last_price", 0.0))
-        raise NotImplementedError
+        return self.get_ticker(symbol).get("last_price", 0.0)
 
     def get_klines(self, symbol: str, interval: Interval) -> list:
         """Get klines for a symbol
@@ -167,7 +189,9 @@ class Base:
         """
         raise NotImplementedError
 
-    def create_order_params(self, config: dict, signal: Signal, last_price: float):
+    def create_order_params(
+        self, config: dict, signal: Signal, last_price: float, **kwargs
+    ) -> dict:
         """Create order parameters
 
         :param config: The bot config to create order parameters for
@@ -183,7 +207,36 @@ class Base:
 
         :rtype: dict
         """
-        raise NotImplementedError
+        min_cost = config["min_cost"]
+        max_amount = config["max_amount"]
+
+        # Check funds then place order
+        if signal == Signal.BUY:
+            if config.currency_free < min_cost:
+                return
+
+            # Calculate the cost and buys the most it can with allocated funds
+            amount = config.currency_free / last_price
+            cost = (
+                amount * last_price
+                if amount < max_amount
+                else max_amount * (last_price * 0.997)
+            )
+        else:
+            if config.asset_free * last_price < min_cost:
+                return
+
+            # Always sells the most it can
+            cost = config.asset_free if config.asset_free < max_amount else max_amount
+
+        return {
+            "symbol": config.currency_pair,
+            "side": signal.name,
+            "type": OrderType.MARKET.name,
+            "cost": float(
+                f"{cost:.8f}"
+            ),  # max 8 decimal place precision required by Binance
+        }
 
     def create_order(self, order: dict) -> dict:
         """Create order

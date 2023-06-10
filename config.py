@@ -9,7 +9,8 @@ class Config:
     DEBUG = True
     API_SANDBOX = False
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI")
+    SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI_DEV")
+    STREAM_DB_URI = os.environ.get("STREAM_DB_URI_DEV")
 
 
 class DevelopmentConfig(Config):
@@ -18,6 +19,10 @@ class DevelopmentConfig(Config):
 
     COINBASE_API_KEY = os.environ.get("COINBASE_API_KEY")
     COINBASE_API_SECRET = os.environ.get("COINBASE_API_SECRET")
+
+    COINBASE_PRO_API_KEY = os.environ.get("COINBASE_PRO_API_KEY")
+    COINBASE_PRO_API_SECRET = os.environ.get("COINBASE_PRO_API_SECRET")
+    COINBASE_PRO_PASSPHRASE = os.environ.get("COINBASE_PRO_PASSPHRASE")
 
 
 class SandboxConfig(Config):

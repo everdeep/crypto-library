@@ -4,7 +4,10 @@ from coinbase.wallet.client import Client
 from coinbasepro.public_client import PublicClient
 
 from cryptolib.enums import ExchangeType, OrderStatus, Signal, Interval
+from cryptolib.model import CurrencyPairModel
 from cryptolib.utils import interval_to_seconds
+
+from sqlalchemy.orm import sessionmaker
 
 from .base import Base
 
@@ -12,7 +15,9 @@ from .base import Base
 class Coinbase(Base):
     # Add stub method from parent
 
-    def __init__(self, api_key: str = None, api_secret: str = None):
+    def __init__(
+        self, api_key: str = None, api_secret: str = None, passphrase: str = None
+    ):
         super().__init__(api_key, api_secret, exchange_type=ExchangeType.COINBASE)
 
         self.fee = {
@@ -37,6 +42,23 @@ class Coinbase(Base):
         )
         self.client_pro = PublicClient(api_url=BASE_URL_PRO, rate_limit=0)
 
+        self.Session = sessionmaker(bind=self._db_engine)
+
+    def _map_symbol(self, symbol):
+        with self.Session() as session:
+            currency_pair: CurrencyPairModel = (
+                session.query(CurrencyPairModel).filter_by(currency_pair=symbol).first()
+            )
+            if currency_pair is None:
+                logging.error(f"Invalid symbol {symbol}")
+                return {}
+
+            return {
+                "symbol": currency_pair.symbol,
+                "pair": currency_pair.pair,
+                "currency_pair": currency_pair.symbol + "-" + currency_pair.pair,
+            }
+
     def get_account(self) -> dict:
         """Get account information
 
@@ -44,7 +66,7 @@ class Coinbase(Base):
 
         :rtype: dict
         """
-        res = _handle_exception(self.client.get_accounts)()["data"]
+        res = self._handle_exception(self.client.get_accounts)()["data"]
         if res is None:
             logging.error(
                 f"Failed to get account information from Coinbase API: sandboxed - {self.sandbox} api_key: {self._api_key}"
@@ -53,8 +75,12 @@ class Coinbase(Base):
 
         return pd.DataFrame(res)
 
-    def get_balance(self) -> list[dict]:
+    def get_balance(self, symbol: str = None) -> list[dict]:
         """Get balance information
+
+        :param symbol: The symbol to get balance information for
+                       Not the currency pair. For example, BTC, ETH, etc.
+        :type symbol: str
 
         :return: The balance details
 
@@ -73,11 +99,11 @@ class Coinbase(Base):
             }
             for i in range(len(balances))
         }
-        return res
 
-    def get_last_price(self, symbol: str) -> float:
-        # TODO: Check symbol is valid
-        return self.client_pro.get_product_ticker(symbol).get("price", 0.0)
+        if symbol:
+            return res.get(symbol, {})
+        
+        return res
 
     def get_historical_klines(self, symbol: str, interval: str) -> list[list]:
         """Get klines for a symbol
@@ -93,6 +119,10 @@ class Coinbase(Base):
         :rtype: DataFrame
         """
 
+        symbol = self._map_symbol(symbol).get("currency_pair")
+        if not symbol:
+            return []
+
         granularity = interval_to_seconds(Interval(interval))
         # Coinbase only supports these intervals
         # 1m, 5m, 15m, 1h, 6h, 1d
@@ -101,7 +131,7 @@ class Coinbase(Base):
             logging.error(f"Invalid interval {interval} for API: Coinbase")
             return []
 
-        res = self.client_pro.get_product_historic_rates(
+        res = self._handle_exception(self.client_pro.get_product_historic_rates)(
             symbol, granularity=granularity
         )
         if res is None:
@@ -132,9 +162,20 @@ class Coinbase(Base):
 
         :rtype: list[dict]
         """
-        raise NotImplementedError
+        symbol = self._map_symbol(symbol).get("symbol")
+        if not symbol:
+            return []
 
-    def get_order(self, symbol: str, order_id: str) -> dict:
+        buys = self._handle_exception(self.client.get_buys)(
+            symbol, status="created"
+        ).get("data", [])
+        sells = self._handle_exception(self.client.get_sells)(
+            symbol, status="created"
+        ).get("data", [])
+
+        return buys + sells
+
+    def get_order(self, symbol: str, order_id: str, **kwargs) -> dict:
         """Get order
 
         :param symbol: The symbol to get order for
@@ -147,7 +188,7 @@ class Coinbase(Base):
 
         :rtype: dict
         """
-        raise NotImplementedError
+        return self._handle_exception(self.client.get_buy)(symbol, order_id)
 
     def get_order_id(self, order: dict) -> str:
         """Get order id
@@ -159,7 +200,7 @@ class Coinbase(Base):
 
         :rtype: str
         """
-        raise NotImplementedError
+        return order["id"]
 
     def get_order_status(self, order: dict) -> OrderStatus:
         """Get order status
@@ -171,7 +212,7 @@ class Coinbase(Base):
 
         :rtype: OrderStatus
         """
-        raise NotImplementedError
+        return order["status"]
 
     def create_order_params(self, config: dict, signal: Signal, last_price: float):
         """Create order parameters
@@ -189,7 +230,15 @@ class Coinbase(Base):
 
         :rtype: dict
         """
-        raise NotImplementedError
+        # Min trade amount is often 10 USD
+        min_cost = 0.0
+
+        # max amount of asset that one can buy/sell
+        max_amount = 0.0
+
+        return super().create_order_params(
+            config, signal, last_price, max_amount, min_cost
+        )
 
     def create_order(self, order: dict) -> dict:
         """Create order
@@ -210,7 +259,10 @@ class Coinbase(Base):
 
         :rtype: dict
         """
-        raise NotImplementedError
+        self.client.buy('2bbf394c-193b-5b2a-9155-3b4732659ede',
+                 amount="10",
+                 currency="BTC",
+                 payment_method="83562370-3e5c-51db-87da-752af5ab9559")
 
     def get_order_cost_and_amount(self, order: dict) -> dict:
         """Get order cost and amount
@@ -247,13 +299,3 @@ class Coinbase(Base):
         :rtype: float
         """
         return 0.0
-
-
-def _handle_exception(func):
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            logging.error(f"Error in {func.__name__}: {e}")
-
-    return wrapper

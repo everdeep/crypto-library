@@ -39,16 +39,22 @@ class Binance(Base):
     def get_all_symbols(self) -> list:
         data = self.exchange.fetch_tickers()
         return data
-    
-    def get_last_price(self, symbol: str) -> float:
-        return self.client.get_symbol_ticker(symbol=symbol)["price"]
 
-    def get_historical_klines(self, symbol: str, interval: str, limit: int = 1000) -> list[list]:
-        res = _handle_exception(self.client.get_klines)(symbol=symbol, interval=interval, limit=limit)
+    # def get_last_price(self, symbol: str) -> float:
+    #     return self.client.get_symbol_ticker(symbol=symbol)["price"]
+
+    def get_historical_klines(
+        self, symbol: str, interval: str, limit: int = 1000
+    ) -> list[list]:
+        res = _handle_exception(self.client.get_klines)(
+            symbol=symbol, interval=interval, limit=limit
+        )
         if res is None:
-            logging.error(f"Error fetching k-lines data for symbol: {symbol}, interval: {interval}, limit: {limit}")
+            logging.error(
+                f"Error fetching k-lines data for symbol: {symbol}, interval: {interval}, limit: {limit}"
+            )
             return []
-        
+
         data = pd.DataFrame(
             res,
             columns=[
@@ -70,7 +76,6 @@ class Binance(Base):
         data.set_index("time", inplace=True)
         data.index = pd.to_datetime(data.index, unit="ms")
         return data
-
 
     def get_account(self) -> dict:
         res = _handle_exception(self.client.get_account)()
@@ -103,16 +108,22 @@ class Binance(Base):
         else:
             return res
 
-    def get_order(self, symbol: str, order_id: str) -> dict:
+    def get_order(self, order_id: str, **kwargs) -> dict:
         """The return dictionary must contain the following keys:
         - amount: (float)
         - cost: (float)
         - fees: (dict)
         - status: (OrderStatus)
         """
+        symbol = kwargs.get("symbol")
+        if not symbol:
+            raise ValueError(f"Symbol not provided for order_id: {order_id}")
+        
         res = _handle_exception(self.exchange.fetch_order)(id=order_id, symbol=symbol)
         if res is None:
-            logging.error(f"Failed to fetch order for orderId: {order_id}, symbol: {symbol}")
+            logging.error(
+                f"Failed to fetch order for orderId: {order_id}, symbol: {symbol}"
+            )
 
         return res
 
@@ -154,31 +165,9 @@ class Binance(Base):
         # max amount of asset that one can buy/sell
         max_amount = self.get_max_order_amount(config.currency_pair)
 
-        # Check funds then place order
-        if signal == Signal.BUY:
-            if config.currency_free < min_cost:
-                return
-            
-            # Calculate the cost and buys the most it can with allocated funds
-            amount = config.currency_free / last_price
-            cost = (
-                amount * last_price
-                if amount < max_amount
-                else max_amount * (last_price * 0.997)
-            )
-        else:
-            if config.asset_free * last_price < min_cost:
-                return
-
-            # Always sells the most it can
-            cost = config.asset_free if config.asset_free < max_amount else max_amount
-
-        return {
-            "symbol": config.currency_pair,
-            "side": signal.name,
-            "type": OrderType.MARKET.name,
-            "cost": float(f"{cost:.8f}"), # max 8 decimal place precision required by Binance
-        }
+        return super().create_order_params(
+            config, signal, last_price, max_amount, min_cost
+        )
 
     def create_order(self, order: dict) -> dict:
         if order["side"] == Signal.BUY.name:
