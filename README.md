@@ -23,7 +23,7 @@ from cryptolib.model import *
 from cryptolib.schema import *
 from cryptolib.utils import *
 from cryptolib.exchange import Binance, Coinbase
-from cryptolib.exchange.stream import Streamer
+from cryptolib.exchange.stream import Stream
 from cryptolib.enums import *
 ```
 
