@@ -1,13 +1,21 @@
+import os
 import logging
 from threading import Lock
-from cryptolib.enums import Interval
-from cryptolib.model import TickerModel, KlinesModel
-from cryptolib.schema import TickerSchema
+from cryptolib.enums import Interval, DepthSide
+from cryptolib.model import TickerModel, KlinesModel, DepthModel
+from cryptolib.schema import TickerSchema, DepthSchema
 from cryptolib.config import config
 from unicorn_binance_websocket_api.manager import BinanceWebSocketApiManager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+# Log all the websocket messages to a file
+logging.basicConfig(
+    filename="../logs/stream.log",
+    filemode="a",
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
 
 class SingletonMeta(type):
     # Thread safe singleton
@@ -497,37 +505,53 @@ class Stream(metaclass=SingletonMeta):
         self.stream_data = {}
         self.depth = []
 
+        logging.info("Initializing Binance Websocket API")
+
         if markets:
             self.MARKETS = markets
 
         if channels:
             self.CHANNELS = channels
 
+        logging.info(f"Streaming on {len(self.CHANNELS)} channels: {self.CHANNELS}")
+        logging.info(f"Tracking {len(self.MARKETS)} markets: {self.MARKETS}")
+
         # Setup database if enabled
         self.db_enabled = db_enabled
         if self.db_enabled:
+            logging.info("Database logging enabled. Connecting to database...")
             self._engine = create_engine(
                 config.STREAM_DB_URI, echo=False, pool_size=20, max_overflow=0
             )
             self.Session = sessionmaker(bind=self._engine)
 
+        # Setup websocket manager
+        logging.info("Initializing websocket manager")
         self._manager = BinanceWebSocketApiManager(
             exchange=self.STREAM_URL if not sandbox else self.SANDBOX_URL,
             output_default="UnicornFy",
         )
 
+        logging.info("Binance Websocket API Initialized")
+
         # self.start()
 
     def start(self):
         """Start the websocket connection"""
+
+        logging.info("Starting websocket live connection")
+
         if len(self.CHANNELS) > 5:
+            logging.warning("Max 5 connections per IP")
             raise ValueError("Max 5 connections per IP")
 
         if len(self.MARKETS) > 1024:
+            logging.warning("Max 1024 markets per connection")
             raise ValueError("Max 1024 markets per connection")
+        
+        self.stream_data = {}
 
         for channel in self.CHANNELS:
-            func = None
             if "kline" in channel:
                 func = getattr(self, "_process_kline")
             elif "depth" in channel:
@@ -535,6 +559,8 @@ class Stream(metaclass=SingletonMeta):
             else:
                 func = getattr(self, f"_process_{channel}")
 
+            logging.info(f"Creating stream for {channel}")
+            
             stream = self._manager.create_stream(
                 channel,
                 markets=self.MARKETS,
@@ -543,9 +569,14 @@ class Stream(metaclass=SingletonMeta):
             )
             self._streams.append(stream)
 
+            logging.info(f"Successfully created stream for {channel}")
+
     def stop(self):
         """Stop the websocket connection"""
+        logging.info("Stopping websocket live connection")
         self._manager.stop_manager_with_all_streams()
+        self._streams = []
+        logging.info("Successfully stopped websocket live connection")
 
     def _process_ticker(self, data):
         """Process new stream data"""
@@ -555,7 +586,6 @@ class Stream(metaclass=SingletonMeta):
                 self.stream_data[stream_type] = {}
 
             symbol = data.get("data", {})[0].get("symbol")
-            self.stream_data[stream_type][symbol] = data.get("data", {})[0]
 
             if self.db_enabled:
                 self._save_db(
@@ -563,9 +593,12 @@ class Stream(metaclass=SingletonMeta):
                     symbol=symbol,
                     data=data.get("data", {})[0],
                 )
+            else:
+                self.stream_data[stream_type][symbol] = data.get("data", {})[0]
 
-        except KeyError:
-            pass
+        except KeyError as e:
+            logging.error(f"Error processing ticker with key value: {e}")
+            logging.error(f"Data: {data}")
 
     def _process_kline(self, data):
         """Process new stream data"""
@@ -576,23 +609,32 @@ class Stream(metaclass=SingletonMeta):
 
             symbol = data["symbol"]
             self.stream_data[stream_type][symbol] = data.get("kline", {})
-        except KeyError:
-            pass
+        except KeyError as e:
+            logging.error(f"Error processing kline with key value: {e}")
+            logging.error(f"Data: {data}")
 
     def _process_depth(self, data):
         """Process new stream data"""
         try:
-            stream_type = data["stream_type"].split("@")[1]
+            stream_type = "depth"
             if stream_type not in self.stream_data:
                 self.stream_data[stream_type] = {}
 
             symbol = data["symbol"]
             self.stream_data[stream_type][symbol] = {
-                "bids": data["bids"],
-                "asks": data["asks"],
+                "bids": [[float(row[0]), float(row[1])] for row in data["bids"]],
+                "asks": [[float(row[0]), float(row[1])] for row in data["asks"]],
             }
-        except KeyError:
-            pass
+
+            if self.db_enabled:
+                self._save_db(
+                    tablename=DepthModel.__tablename__,
+                    symbol=symbol,
+                    data=data,
+                )
+        except KeyError as e:
+            logging.error(f"Error processing depth with key value: {e}")
+            logging.error(f"Data: {data}")
 
     def _remove_columns(self, data, columns):
         """Remove columns from data"""
@@ -607,6 +649,7 @@ class Stream(metaclass=SingletonMeta):
             return
 
         if not kwargs.get("interval") and tablename == KlinesModel.__tablename__:
+            logging.warning("Missing interval argument for kline data")
             raise ValueError("Missing interval argument for kline data")
 
         with self.Session() as session:
@@ -648,9 +691,34 @@ class Stream(metaclass=SingletonMeta):
                         # create new kline
                         kline = KlinesModel(**data)
                         session.add(kline)
+
+                elif tablename == DepthModel.__tablename__:
+                    # Clear old data
+                    session.query(DepthModel).filter_by(symbol=symbol).delete()
+                    session.flush()
+
+                    # Create new Bid records
+                    for bid in data["bids"]:
+                        depth = DepthModel(
+                            symbol=symbol,
+                            price=bid[0],
+                            quantity=bid[1],
+                            side=DepthSide.BID,
+                        )
+                        session.add(depth)
+
+                    # Create new Ask records
+                    for ask in data["asks"]:
+                        depth = DepthModel(
+                            symbol=symbol,
+                            price=ask[0],
+                            quantity=ask[1],
+                            side=DepthSide.ASK,
+                        )
+                        session.add(depth)
+
             except Exception as e:
-                logging.error(f"Failed to save {tablename} data to database")
-                logging.error(e)
+                logging.error(f"Failed to save {tablename} data to database: {e}")
                 self.stop()
 
             session.commit()
@@ -701,4 +769,21 @@ class Stream(metaclass=SingletonMeta):
         :return: The depth
         :rtype: dict
         """
+
+        if self.db_enabled:
+            with self.Session() as session:
+                depth = session.query(DepthModel).filter_by(symbol=symbol).all()
+                deserialised = DepthSchema(many=True).dump(depth)
+                bids = [
+                    [row["price"], row["quantity"]]
+                    for row in deserialised
+                    if row["side"] == DepthSide.BID.value
+                ]
+                asks = [
+                    [row["price"], row["quantity"]]
+                    for row in deserialised
+                    if row["side"] == DepthSide.ASK.value
+                ]
+                return {"bids": bids, "asks": asks}
+
         return self.stream_data.get("depth", {}).get(symbol, {})

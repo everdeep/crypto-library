@@ -17,6 +17,7 @@ from .userroles import roles_users
 from .serveractivity import ServerActivityModel
 from .ticker import TickerModel
 from .klines import KlinesModel
+from .depth import DepthModel
 
 from sqlalchemy.orm import relationship
 

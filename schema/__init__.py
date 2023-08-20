@@ -14,3 +14,4 @@ from .role import RoleSchema
 from .serveractivity import ServerActivitySchema
 from .useractivity import UserActivitySchema
 from .ticker import TickerSchema
+from .depth import DepthSchema

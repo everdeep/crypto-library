@@ -1,6 +1,6 @@
-DROP DATABASE IF EXISTS `cryptodata`;
-CREATE DATABASE `cryptodata`;
-USE `cryptodata`;
+DROP DATABASE IF EXISTS `streamdb`;
+CREATE DATABASE `streamdb`;
+USE `streamdb`;
 
 CREATE TABLE tickers (
     id INT NOT NULL AUTO_INCREMENT,
@@ -54,36 +54,14 @@ CREATE TABLE klines (
 );
 
 CREATE TABLE depth (
-    id INT NOT NULL AUTO_INCREMENT,
+    id VARCHAR(32) NOT NULL,
     symbol VARCHAR(20) NOT NULL,
-    depth_type VARCHAR(20) NOT NULL,
-    
-    ask_price DECIMAL(30, 10) NOT NULL,
-    ask_quantity DECIMAL(30, 10) NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    UNIQUE KEY (symbol),
-    INDEX (symbol)
-);
-
-CREATE TABLE bids (
-    id INT NOT NULL AUTO_INCREMENT,
-    depth_id INT NOT NULL,
     price DECIMAL(30, 10) NOT NULL,
     quantity DECIMAL(30, 10) NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    side VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    INDEX (depth_id),
-    FOREIGN KEY (depth_id) REFERENCES depth(id)
+    UNIQUE KEY (symbol, side, price),
+    INDEX (symbol),
+    INDEX (symbol, side)
 );
-
-CREATE TABLE asks (
-    id INT NOT NULL AUTO_INCREMENT,
-    depth_id INT NOT NULL,
-    price DECIMAL(30, 10) NOT NULL,
-    quantity DECIMAL(30, 10) NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    INDEX (depth_id),
-    FOREIGN KEY (depth_id) REFERENCES depth(id)
-);c

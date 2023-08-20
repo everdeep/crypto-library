@@ -9,8 +9,8 @@ from binance.exceptions import BinanceAPIException, BinanceOrderException
 
 
 class Binance(Base):
-    def __init__(self, api_key: str = None, api_secret: str = None):
-        super().__init__(api_key, api_secret, exchange_type=ExchangeType.BINANCE)
+    def __init__(self, api_key: str = None, api_secret: str = None, streaming: bool = False):
+        super().__init__(api_key, api_secret, exchange_type=ExchangeType.BINANCE, streaming=streaming)
 
         self.fee = {
             "taker": 0.001,

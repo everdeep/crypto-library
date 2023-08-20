@@ -102,6 +102,11 @@ class RoleType(Enum):
     ADMIN = "admin"
     USER = "user"
 
+class DepthSide(Enum):
+    """Depth side"""
+
+    BID = "bid"
+    ASK = "ask"
 
 class UserActions(Enum):
     """User actions"""

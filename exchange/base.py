@@ -1,9 +1,16 @@
 import ccxt
 import logging
 
-from cryptolib.enums import OrderStatus, Signal, ExchangeType, Interval, OrderType
-from cryptolib.model import TickerModel
-from cryptolib.schema import TickerSchema
+from cryptolib.enums import (
+    OrderStatus,
+    Signal,
+    ExchangeType,
+    Interval,
+    OrderType,
+    DepthSide,
+)
+from cryptolib.model import TickerModel, DepthModel
+from cryptolib.schema import TickerSchema, DepthSchema
 from cryptolib.config import config
 
 from sqlalchemy import create_engine
@@ -12,9 +19,14 @@ from sqlalchemy.orm import Session
 
 class Base:
     def __init__(
-        self, api_key=None, api_secret=None, exchange_type: ExchangeType = None
+        self,
+        api_key=None,
+        api_secret=None,
+        exchange_type: ExchangeType = None,
+        streaming=False,
     ):
         self.sandbox = config.API_SANDBOX if hasattr(config, "API_SANDBOX") else False
+        self.streaming = streaming
 
         # Use global dev api keys if user has no api keys
         if not api_key and config.DEBUG == True:
@@ -32,13 +44,16 @@ class Base:
         )
         self.exchange.set_sandbox_mode(self.sandbox)
 
-        # Create stream DB Engine
+        # Create DB Engine
         self._db_engine = create_engine(
             config.SQLALCHEMY_DATABASE_URI, echo=False, pool_size=20
         )
-        self._stream_engine = create_engine(
-            config.STREAM_DB_URI, echo=False, pool_size=20
-        )
+
+        # Create stream DB Engine if enabled
+        if config.STREAM_DB_URI and self.streaming:
+            self._stream_engine = create_engine(
+                config.STREAM_DB_URI, echo=False, pool_size=20
+            )
 
     def _load_dev_api_keys(self, exchange_type: ExchangeType):
         """Load dev api keys from config"""
@@ -88,6 +103,10 @@ class Base:
 
         :rtype: dict
         """
+
+        if not self.streaming:
+            return self.exchange.fetch_ticker(symbol)
+
         with Session(self._stream_engine) as session:
             ticker = session.query(TickerModel).filter_by(symbol=symbol).first()
             return TickerSchema().dump(ticker) if ticker else {}
@@ -102,7 +121,54 @@ class Base:
 
         :rtype: float
         """
+
+        if not self.streaming:
+            return self.exchange.fetch_ticker(symbol).get("last", 0.0)
+
         return self.get_ticker(symbol).get("last_price", 0.0)
+
+    def get_depth(self, symbol: str) -> dict:
+        """Get depth for a symbol
+
+        :param symbol: The symbol to get depth information for
+        :type symbol: str
+
+        :return: The depth information for the symbol
+
+        :rtype: dict
+        """
+        if not self.streaming:
+            return self.exchange.fetch_order_book(symbol)
+
+        with Session(self._stream_engine) as session:
+            depth = session.query(DepthModel).filter_by(symbol=symbol).all()
+            deserialised = DepthSchema(many=True).dump(depth)
+            bids = [
+                [row["price"], row["quantity"]]
+                for row in deserialised
+                if row["side"] == DepthSide.BID.value
+            ]
+            asks = [
+                [row["price"], row["quantity"]]
+                for row in deserialised
+                if row["side"] == DepthSide.ASK.value
+            ]
+            return {"bids": bids, "asks": asks}
+
+    def get_spread(self, symbol: str) -> float:
+        """Get spread for a symbol
+
+        :param symbol: The symbol to get spread information for
+        :type symbol: str
+
+        :return: The spread information for the symbol
+
+        :rtype: float
+        """
+        depth = self.get_depth(symbol)
+        max_bid = max([bid[0] for bid in depth["bids"]])
+        min_ask = min([ask[0] for ask in depth["asks"]])
+        return min_ask - max_bid
 
     def get_klines(self, symbol: str, interval: Interval) -> list:
         """Get klines for a symbol
