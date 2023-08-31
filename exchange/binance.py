@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from .base import Base
 
-from cryptolib.enums import OrderStatus, OrderType, Signal, ExchangeType
+from cryptolib.enums import OrderStatus, Signal, ExchangeType
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceOrderException
 

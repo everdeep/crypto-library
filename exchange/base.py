@@ -25,7 +25,13 @@ class Base:
         exchange_type: ExchangeType = None,
         streaming=False,
     ):
+        # Sandbox mode 
         self.sandbox = config.API_SANDBOX if hasattr(config, "API_SANDBOX") else False
+
+        # Streaming flag to determine if the exchange is configured
+        # to use the stream or not. If the stream is disabled, the
+        # exchange will make API calls to the exchange directly.
+        # This can result in rate limiting issues.
         self.streaming = streaming
 
         # Use global dev api keys if user has no api keys
@@ -35,6 +41,8 @@ class Base:
             self._api_key = api_key
             self._api_secret = api_secret
 
+        # The ccxt exchange is to account for some of the functionality
+        # that may be missing within the official exchange APIs
         self.exchange = ccxt.binance(
             {
                 "apiKey": api_key,
@@ -44,12 +52,15 @@ class Base:
         )
         self.exchange.set_sandbox_mode(self.sandbox)
 
-        # Create DB Engine
+        # This is the primary connection to the main DB
         self._db_engine = create_engine(
             config.SQLALCHEMY_DATABASE_URI, echo=False, pool_size=20
         )
 
-        # Create stream DB Engine if enabled
+        # The exchanges do not access raw data from the stream and only
+        # access the data from the main DB. So even if the stream is
+        # disabled, the exchanges will still work but the data will just
+        # be outdated.
         if config.STREAM_DB_URI and self.streaming:
             self._stream_engine = create_engine(
                 config.STREAM_DB_URI, echo=False, pool_size=20
@@ -67,6 +78,7 @@ class Base:
             raise Exception("Error loading api key... Exchange type not supported")
 
     def _handle_exception(self, func):
+        """General error handler for exchange API calls"""
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)

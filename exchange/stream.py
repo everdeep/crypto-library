@@ -528,7 +528,7 @@ class Stream(metaclass=SingletonMeta):
         # Setup websocket manager
         logging.info("Initializing websocket manager")
         self._manager = BinanceWebSocketApiManager(
-            exchange=self.STREAM_URL if not sandbox else self.SANDBOX_URL,
+            exchange=self.STREAM_URL if not self._sandbox else self.SANDBOX_URL,
             output_default="UnicornFy",
         )
 
